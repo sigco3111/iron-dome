@@ -82,21 +82,21 @@ const difficultySettings = {
     EASY: {
         range: 40,
         missileSpeedMultiplier: 0.5,
-        maxMissiles: 10,
+        maxMissiles: 20,
         enableTypeC: false,
         enableTypeB: true
     },
     NORMAL: {
         range: 36,
         missileSpeedMultiplier: 0.6,
-        maxMissiles: 15,
+        maxMissiles: 30,
         enableTypeC: true,
         enableTypeB: true
     },
     HARD: {
         range: 32,
         missileSpeedMultiplier: 0.9,
-        maxMissiles: 20,
+        maxMissiles: 40,
         enableTypeC: true,
         enableTypeB: true
     }
