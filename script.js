@@ -1476,7 +1476,6 @@ document.getElementById('startButton').addEventListener('click', () => {
         isGameActive = true;
         createCity();
         document.getElementById('startButton').style.display = 'none';
-        document.getElementById('leaderboardButton').style.display = 'none';
         document.getElementById('settingsMenu').style.display = 'none';
         
         // Initialize UI
