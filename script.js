@@ -615,6 +615,11 @@ class Building extends THREE.Mesh {
                     window.destroyedLowBuildingCount = (window.destroyedLowBuildingCount || 0) + 1;
                 }
                 
+                // 건물 파괴 기록
+                if (playerHistory) {
+                    playerHistory.recordBuildingDestroyed(this.buildingCategory);
+                }
+                
                 console.log(`건물 붕괴 완료! 유형: ${this.buildingCategory}, 높이: ${height}, 총 파괴된 높이: ${destroyedTotalHeight}/${initialTotalHeight}`);
             }
         });
@@ -998,6 +1003,11 @@ class UpgradeSystem {
     
     // 효과 적용
     this.applyUpgradeEffect(category, type);
+    
+    // 업그레이드 기록
+    if (playerHistory) {
+      playerHistory.recordUpgrade(category, type, upgrade.level);
+    }
     
     return { success: true, cost: cost };
   }
@@ -1529,6 +1539,11 @@ class MissileLauncher {
         const missile = new DefenseMissile(this.position.clone(), target.position);
         missile.targetEnemy = target;
         
+        // 방어 미사일 발사 기록
+        if (playerHistory) {
+            playerHistory.recordMissileFired('defense');
+        }
+        
         // Visual feedback
         this.createLaunchEffect();
         
@@ -1799,6 +1814,11 @@ class EnemyMissile {
                 this.explosionRadius = 6;
                 this.damageAmount = 40;
                 break;
+        }
+        
+        // 적 미사일 발사 기록
+        if (playerHistory) {
+            playerHistory.recordMissileFired('enemy');
         }
         
         // Random spawn position
@@ -2129,7 +2149,14 @@ function updateTimer(delta) {
     if (isCooldown) {
         cooldownTimer -= delta;
         document.getElementById('cooldownTime').textContent = Math.ceil(cooldownTimer);
+        
+        // 자동으로 웨이브 시작 (웨이브 시작 버튼 제거로 인한 기능 통합)
         if (cooldownTimer <= 0) {
+            // 웨이브 종료 데이터 기록
+            if (playerHistory) {
+                playerHistory.endWaveTracking();
+            }
+            
             // Calculate wave completion bonuses
             const waveBonus = calculateWaveCompletionBonus();
             
@@ -2142,9 +2169,18 @@ function updateTimer(delta) {
             document.getElementById('money').textContent = money;
             document.getElementById('cooldown').style.display = 'none';
             
+            // 자금 획득 기록
+            if (playerHistory) {
+                playerHistory.recordMoneyEarned(100 + waveBonus);
+                playerHistory.startWaveTracking(); // 새 웨이브 추적 시작
+            }
+            
             // Reset wave tracking variables
             waveStartInterceptedCount = interceptedCount;
             waveStartGroundHitsCount = groundHitsCount;
+            
+            // 웨이브 시작 알림 메시지
+            showMessage(`웨이브 ${currentStage} 시작! +$${100 + waveBonus} 보너스`, 2000);
         }
     } else {
         gameTimer -= delta;
@@ -2154,6 +2190,9 @@ function updateTimer(delta) {
             isCooldown = true;
             cooldownTimer = 5;
             document.getElementById('cooldown').style.display = 'block';
+            
+            // 웨이브 종료 메시지
+            showMessage(`웨이브 ${currentStage} 종료! 5초 후 다음 웨이브 시작`, 2000);
         }
     }
 }
@@ -2205,6 +2244,19 @@ function animate(currentTime) {
         // Update left panel stats
         updateLeftPanelStats();
         
+        // 게임 오버 체크 - 도시 건물이 모두 파괴된 경우
+        if (cityHealthPercentage <= 0.1 && isGameActive) {
+            // 게임 종료 처리
+            isGameActive = false;
+            
+            // 결과 화면 표시
+            if (playerHistory) {
+                playerHistory.showGameResultsScreen();
+            }
+            
+            console.log("게임 오버: 도시가 파괴되었습니다.");
+        }
+        
         // Debug: Log city health changes
         if (destroyedTotalHeight > 0) {
             console.log(`도시 체력 업데이트: ${remainingHeight.toFixed(1)}/${initialTotalHeight.toFixed(1)} (${cityHealthPercentage.toFixed(1)}%)`);
@@ -2243,6 +2295,10 @@ document.getElementById('startButton').addEventListener('click', () => {
         // 업그레이드 시스템 초기화
         upgradeSystem = new UpgradeSystem();
         window.upgradeSystem = upgradeSystem; // 전역에서 접근 가능하도록 설정
+        
+        // 플레이어 이력 시각화 초기화
+        playerHistory = new PlayerHistoryVisualizer();
+        playerHistory.initialize();
         
         document.getElementById('startButton').style.display = 'none';
         document.getElementById('settingsMenu').style.display = 'none';
@@ -2378,16 +2434,7 @@ function setupPurchaseButtons() {
     });
     container.appendChild(upgradeButton);
 
-    // Start Wave button
-    const startWaveButton = document.createElement('div');
-    startWaveButton.className = 'purchase-button start-wave-card';
-    startWaveButton.innerHTML = `
-        <div>⚡</div>
-        <div>웨이브 시작</div>
-        <div>지금!</div>
-    `;
-    startWaveButton.addEventListener('click', () => startWaveImmediately());
-    container.appendChild(startWaveButton);
+    // 웨이브 시작 버튼 제거됨
 }
 
 /**
@@ -2638,6 +2685,12 @@ function placeLauncher(position) {
     money -= cost;
     document.getElementById('money').textContent = money;
     
+    // 지출 기록
+    if (playerHistory) {
+        playerHistory.recordMoneySpent(cost);
+        playerHistory.recordLauncherPlaced();
+    }
+    
     const launcher = new MissileLauncher(position);
     launchers.push(launcher);
     
@@ -2659,6 +2712,12 @@ function placeFactory(position) {
     
     money -= cost;
     document.getElementById('money').textContent = money;
+    
+    // 지출 기록
+    if (playerHistory) {
+        playerHistory.recordMoneySpent(cost);
+        playerHistory.recordFactoryPlaced();
+    }
     
     const factory = new MissileFactory(position);
     factories.push(factory);
@@ -2951,3 +3010,969 @@ window.addEventListener('keydown', (event) => {
 animate();
 
 console.log('미사일 방어 시뮬레이터가 성공적으로 로드되었습니다!');
+
+/**
+ * 플레이어 이력 시각화 클래스
+ * 게임 진행 데이터를 기록하고 시각화하는 기능을 담당합니다.
+ */
+class PlayerHistoryVisualizer {
+  constructor() {
+    // 게임 데이터 저장 객체
+    this.gameData = {
+      waves: [],                 // 웨이브별 데이터
+      totalIntercepted: 0,       // 총 요격 수
+      totalGroundHits: 0,        // 총 미사일 피해 수
+      buildingsLost: 0,          // 파괴된 건물 수
+      initialBuildingsCount: 0,  // 초기 건물 수
+      moneyEarned: 0,            // 총 획득 자금
+      moneySpent: 0,             // 총 지출 자금
+      launchers: 0,              // 배치한 발사대 수
+      factories: 0,              // 배치한 공장 수
+      upgrades: {                // 업그레이드 내역
+        launcher: {},
+        factory: {},
+        city: {}
+      },
+      startTime: 0,              // 게임 시작 시간
+      endTime: 0,                // 게임 종료 시간
+      difficulty: '',            // 난이도
+    };
+    
+    // 현재 웨이브 데이터
+    this.currentWaveData = null;
+    
+    // 이전 저장된 게임 데이터
+    this.previousGameData = null;
+    
+    console.log('플레이어 이력 시각화 클래스 초기화됨');
+  }
+  
+  /**
+   * 게임 시작 시 초기화
+   */
+  initialize() {
+    this.gameData.startTime = Date.now();
+    this.gameData.difficulty = DIFFICULTY;
+    this.gameData.initialBuildingsCount = initialBuildingCount || 0;
+    this.startWaveTracking();
+    
+    // 이전 게임 데이터 로드
+    this.loadPreviousGameData();
+    
+    console.log('게임 데이터 추적 시작');
+  }
+  
+  /**
+   * 새 웨이브 시작 시 웨이브 데이터 추적 시작
+   */
+  startWaveTracking() {
+    this.currentWaveData = {
+      waveNumber: currentStage,
+      startTime: Date.now(),
+      endTime: null,
+      intercepted: 0,
+      groundHits: 0,
+      missilesFired: 0,
+      moneyAtStart: money,
+      moneyAtEnd: 0,
+      buildingsLostDuringWave: 0,
+      buildingsHealthAtStart: this.getCurrentCityHealth(),
+      buildingsHealthAtEnd: 0
+    };
+  }
+  
+  /**
+   * 웨이브 종료 시 웨이브 데이터 저장
+   */
+  endWaveTracking() {
+    if (!this.currentWaveData) return;
+    
+    // 현재 웨이브 데이터 완성
+    this.currentWaveData.endTime = Date.now();
+    this.currentWaveData.intercepted = interceptedCount - this.gameData.totalIntercepted;
+    this.currentWaveData.groundHits = groundHitsCount - this.gameData.totalGroundHits;
+    this.currentWaveData.moneyAtEnd = money;
+    this.currentWaveData.buildingsHealthAtEnd = this.getCurrentCityHealth();
+    
+    // 전체 게임 데이터에 웨이브 데이터 추가
+    this.gameData.waves.push(this.currentWaveData);
+    
+    // 전체 통계 업데이트
+    this.gameData.totalIntercepted = interceptedCount;
+    this.gameData.totalGroundHits = groundHitsCount;
+    
+    console.log(`웨이브 ${currentStage} 데이터 기록: 요격 ${this.currentWaveData.intercepted}, 피해 ${this.currentWaveData.groundHits}`);
+  }
+  
+  /**
+   * 현재 도시 건물 체력 백분율 계산
+   * @returns {number} 도시 건물 체력 백분율 (0-100)
+   */
+  getCurrentCityHealth() {
+    if (!initialTotalHeight) return 100;
+    const remainingHeight = Math.max(0, initialTotalHeight - destroyedTotalHeight);
+    return (remainingHeight / initialTotalHeight) * 100;
+  }
+  
+  /**
+   * 미사일 발사 시 기록
+   * @param {string} type - 미사일 타입 ('defense' 또는 'enemy')
+   */
+  recordMissileFired(type) {
+    if (type === 'defense' && this.currentWaveData) {
+      this.currentWaveData.missilesFired++;
+    }
+  }
+  
+  /**
+   * 자금 획득 기록
+   * @param {number} amount - 획득한 자금
+   */
+  recordMoneyEarned(amount) {
+    this.gameData.moneyEarned += amount;
+  }
+  
+  /**
+   * 자금 지출 기록
+   * @param {number} amount - 지출한 자금
+   */
+  recordMoneySpent(amount) {
+    this.gameData.moneySpent += amount;
+  }
+  
+  /**
+   * 건물 파괴 기록
+   * @param {string} buildingType - 건물 유형
+   */
+  recordBuildingDestroyed(buildingType) {
+    this.gameData.buildingsLost++;
+    if (this.currentWaveData) {
+      this.currentWaveData.buildingsLostDuringWave++;
+    }
+  }
+  
+  /**
+   * 발사대 배치 기록
+   */
+  recordLauncherPlaced() {
+    this.gameData.launchers++;
+  }
+  
+  /**
+   * 공장 배치 기록
+   */
+  recordFactoryPlaced() {
+    this.gameData.factories++;
+  }
+  
+  /**
+   * 업그레이드 기록
+   * @param {string} category - 업그레이드 카테고리 (launcher, factory, city)
+   * @param {string} type - 업그레이드 유형
+   * @param {number} level - 업그레이드 레벨
+   */
+  recordUpgrade(category, type, level) {
+    if (!this.gameData.upgrades[category]) {
+      this.gameData.upgrades[category] = {};
+    }
+    
+    this.gameData.upgrades[category][type] = level;
+  }
+  
+  /**
+   * 게임 종료 시 최종 데이터 기록
+   */
+  finalizeGameData() {
+    // 마지막 웨이브 데이터 저장
+    this.endWaveTracking();
+    
+    // 게임 종료 시간 기록
+    this.gameData.endTime = Date.now();
+    
+    // 게임 총 점수 계산
+    const finalScore = this.calculateFinalScore();
+    this.gameData.finalScore = finalScore;
+    
+    // 이전 게임 데이터 저장
+    this.saveCurrentGameData();
+    
+    console.log('게임 데이터 기록 완료:', this.gameData);
+    return finalScore;
+  }
+  
+  /**
+   * 최종 점수 계산
+   * @returns {number} 최종 점수
+   */
+  calculateFinalScore() {
+    const cityHealthPercent = this.getCurrentCityHealth();
+    const interceptRatio = this.gameData.totalIntercepted / (this.gameData.totalIntercepted + this.gameData.totalGroundHits || 1);
+    const upgradeFactor = this.calculateUpgradeFactor();
+    
+    // 점수 계산 공식: 웨이브 수 * (도시 건물 체력 % + 요격율 * 100) * 난이도 계수 * 업그레이드 계수
+    const difficultyFactor = DIFFICULTY === 'EASY' ? 0.8 : DIFFICULTY === 'NORMAL' ? 1 : 1.5;
+    
+    let score = currentStage * (cityHealthPercent + interceptRatio * 100) * difficultyFactor * upgradeFactor;
+    
+    // 최소값 보장
+    score = Math.max(100, Math.round(score));
+    
+    return score;
+  }
+  
+  /**
+   * 업그레이드 계수 계산
+   * @returns {number} 업그레이드 계수 (1.0-1.5)
+   */
+  calculateUpgradeFactor() {
+    let totalUpgradeCount = 0;
+    
+    // 모든 카테고리의 업그레이드 수 합산
+    Object.keys(this.gameData.upgrades).forEach(category => {
+      Object.values(this.gameData.upgrades[category]).forEach(level => {
+        totalUpgradeCount += level || 0;
+      });
+    });
+    
+    // 업그레이드에 따른 보너스 계수 (1.0-1.5 사이)
+    return 1 + Math.min(0.5, totalUpgradeCount * 0.05);
+  }
+  
+  /**
+   * 이전 게임 데이터를 localStorage에서 로드
+   */
+  loadPreviousGameData() {
+    try {
+      const savedData = localStorage.getItem('missileDefensePreviousGameData');
+      if (savedData) {
+        this.previousGameData = JSON.parse(savedData);
+        console.log('이전 게임 데이터 로드됨');
+      }
+    } catch (error) {
+      console.error('이전 게임 데이터 로드 실패:', error);
+    }
+  }
+  
+  /**
+   * 현재 게임 데이터를 localStorage에 저장
+   */
+  saveCurrentGameData() {
+    try {
+      localStorage.setItem('missileDefensePreviousGameData', JSON.stringify(this.gameData));
+      console.log('현재 게임 데이터 저장됨');
+    } catch (error) {
+      console.error('게임 데이터 저장 실패:', error);
+    }
+  }
+  
+  /**
+   * 업적 계산 및 생성
+   * @returns {Array} 업적 목록
+   */
+  generateAchievements() {
+    const achievements = [];
+    const { totalIntercepted, totalGroundHits, buildingsLost, launchers, factories, waves } = this.gameData;
+    
+    // 요격 전문가
+    if (totalIntercepted > 0) {
+      const interceptRatio = totalIntercepted / (totalIntercepted + totalGroundHits || 1);
+      let title, description;
+      
+      if (interceptRatio >= 0.9) {
+        title = "철벽 방어의 달인";
+        description = "90% 이상의 적 미사일을 요격하여 최고의 방어 능력을 보여주었습니다!";
+      } else if (interceptRatio >= 0.7) {
+        title = "우수 방공 지휘관";
+        description = "70% 이상의 적 미사일을 요격하여 훌륭한 방어 능력을 보여주었습니다.";
+      } else if (interceptRatio >= 0.5) {
+        title = "유능한 방어자";
+        description = "50% 이상의 적 미사일을 요격하여 적절한 방어 능력을 보여주었습니다.";
+      }
+      
+      if (title) {
+        achievements.push({
+          title,
+          description,
+          highlight: `요격율: ${(interceptRatio * 100).toFixed(1)}%`
+        });
+      }
+    }
+    
+    // 도시 보호자
+    const cityHealth = this.getCurrentCityHealth();
+    if (cityHealth >= 90) {
+      achievements.push({
+        title: "불굴의 도시 수호자",
+        description: "도시 건물을 90% 이상 보존하여 시민들의 안전을 지켜냈습니다!",
+        highlight: `도시 상태: ${cityHealth.toFixed(1)}%`
+      });
+    } else if (cityHealth >= 70) {
+      achievements.push({
+        title: "헌신적인 방위자",
+        description: "도시 건물을 70% 이상 보존하여 피해를 최소화했습니다.",
+        highlight: `도시 상태: ${cityHealth.toFixed(1)}%`
+      });
+    }
+    
+    // 웨이브 생존
+    if (waves.length >= 10) {
+      achievements.push({
+        title: "생존의 달인",
+        description: "10웨이브 이상 생존하여 뛰어난 지구력을 보여주었습니다!",
+        highlight: `생존 웨이브: ${waves.length}`
+      });
+    } else if (waves.length >= 5) {
+      achievements.push({
+        title: "경험많은 지휘관",
+        description: "5웨이브 이상 생존하여 침착한 지휘 능력을 보여주었습니다.",
+        highlight: `생존 웨이브: ${waves.length}`
+      });
+    }
+    
+    // 전략가
+    if (launchers >= 5 && factories >= 2) {
+      achievements.push({
+        title: "전략적 지휘관",
+        description: "다수의 방어 시스템을 효율적으로 배치하여 뛰어난 전략적 안목을 보여주었습니다.",
+        highlight: `발사대: ${launchers}개, 공장: ${factories}개`
+      });
+    }
+    
+    // 경제 전문가
+    const economyRatio = this.gameData.moneyEarned / (this.gameData.moneySpent || 1);
+    if (economyRatio > 1.5) {
+      achievements.push({
+        title: "자원 관리의 달인",
+        description: "뛰어난 경제 관리로 높은 자원 효율성을 달성했습니다!",
+        highlight: `자원 효율성: ${(economyRatio * 100).toFixed(0)}%`
+      });
+    }
+    
+    // 난이도 관련
+    if (DIFFICULTY === 'HARD' && waves.length >= 3) {
+      achievements.push({
+        title: "무모한 용기",
+        description: "어려운 난이도에서 3웨이브 이상 생존하여 뛰어난 기량을 보여주었습니다!",
+        highlight: `난이도: 어려움`
+      });
+    }
+    
+    return achievements;
+  }
+  
+  /**
+   * 웨이브 상세 정보 생성
+   * @param {number} waveNumber - 웨이브 번호
+   * @returns {Object} 웨이브 상세 정보
+   */
+  getWaveDetails(waveNumber) {
+    const waveData = this.gameData.waves.find(wave => wave.waveNumber === waveNumber);
+    if (!waveData) return null;
+    
+    const duration = (waveData.endTime - waveData.startTime) / 1000; // 초 단위
+    const interceptRate = waveData.intercepted / (waveData.intercepted + waveData.groundHits || 1) * 100;
+    const moneyEarned = waveData.moneyAtEnd - waveData.moneyAtStart;
+    const buildingHealthChange = waveData.buildingsHealthAtEnd - waveData.buildingsHealthAtStart;
+    
+    return {
+      waveNumber: waveData.waveNumber,
+      duration: duration.toFixed(1),
+      intercepted: waveData.intercepted,
+      groundHits: waveData.groundHits,
+      interceptRate: interceptRate.toFixed(1),
+      missilesFired: waveData.missilesFired,
+      moneyEarned,
+      buildingsLost: waveData.buildingsLostDuringWave,
+      buildingHealthChange: buildingHealthChange.toFixed(1)
+    };
+  }
+  
+  /**
+   * 게임 결과 화면 표시
+   */
+  showGameResultsScreen() {
+    // 최종 점수 계산
+    const finalScore = this.finalizeGameData();
+    
+    // 결과 화면의 기본 통계 업데이트
+    document.getElementById('finalIntercepted').textContent = this.gameData.totalIntercepted;
+    document.getElementById('finalGroundHits').textContent = this.gameData.totalGroundHits;
+    document.getElementById('finalCityHealth').textContent = `${this.getCurrentCityHealth().toFixed(1)}%`;
+    document.getElementById('finalScore').textContent = finalScore.toLocaleString();
+    
+    // 그래프 데이터 생성 및 그래프 렌더링
+    this.renderCharts();
+    
+    // 업적 표시
+    this.renderAchievements();
+    
+    // 웨이브 선택기 초기화
+    this.initializeWaveSelector();
+    
+    // 이전 게임과 비교 데이터 표시
+    this.renderComparisonData();
+    
+    // 탭 전환 이벤트 리스너 등록
+    this.setupTabEventListeners();
+    
+    // 결과 화면 표시
+    document.getElementById('endGameScreen').classList.add('visible');
+  }
+  
+  /**
+   * 탭 전환 이벤트 리스너 설정
+   */
+  setupTabEventListeners() {
+    const tabButtons = document.querySelectorAll('.player-history-tab');
+    
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.getAttribute('data-tab');
+        
+        // 모든 탭 내용 숨기기
+        document.querySelectorAll('.player-history-panel').forEach(panel => {
+          panel.classList.remove('active');
+        });
+        
+        // 모든 탭 버튼 비활성화
+        tabButtons.forEach(btn => {
+          btn.classList.remove('active');
+        });
+        
+        // 선택한 탭 내용 및 버튼 활성화
+        document.getElementById(targetTab).classList.add('active');
+        button.classList.add('active');
+      });
+    });
+  }
+  
+  /**
+   * 차트 렌더링
+   */
+  renderCharts() {
+    // 1. 요격 성공률 차트
+    this.renderInterceptRateChart();
+    
+    // 2. 도시 건물 손실률 차트
+    this.renderBuildingLossChart();
+    
+    // 3. 자원 관리 효율성 차트
+    this.renderResourceEfficiencyChart();
+  }
+  
+  /**
+   * 요격 성공률 차트 렌더링
+   */
+  renderInterceptRateChart() {
+    const ctx = document.getElementById('interceptRateChart').getContext('2d');
+    
+    // 웨이브별 요격률 데이터 준비
+    const waveLabels = this.gameData.waves.map(wave => `웨이브 ${wave.waveNumber}`);
+    const interceptRates = this.gameData.waves.map(wave => {
+      const total = wave.intercepted + wave.groundHits;
+      return total > 0 ? (wave.intercepted / total * 100) : 0;
+    });
+    
+    // 차트 생성
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: waveLabels,
+        datasets: [{
+          label: '요격 성공률 (%)',
+          data: interceptRates,
+          borderColor: '#00ffd5',
+          backgroundColor: 'rgba(0, 255, 213, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          },
+          x: {
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff'
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * 도시 건물 손실률 차트 렌더링
+   */
+  renderBuildingLossChart() {
+    const ctx = document.getElementById('buildingLossChart').getContext('2d');
+    
+    // 웨이브별 도시 건물 상태 데이터 준비
+    const waveLabels = this.gameData.waves.map(wave => `웨이브 ${wave.waveNumber}`);
+    const buildingHealthData = this.gameData.waves.map(wave => wave.buildingsHealthAtEnd);
+    
+    // 차트 생성
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: waveLabels,
+        datasets: [{
+          label: '도시 건물 상태 (%)',
+          data: buildingHealthData,
+          backgroundColor: '#00ff00',
+          borderColor: '#008800',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          },
+          x: {
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff'
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * 자원 관리 효율성 차트 렌더링
+   */
+  renderResourceEfficiencyChart() {
+    const ctx = document.getElementById('resourceEfficiencyChart').getContext('2d');
+    
+    // 웨이브별 자금 변화 계산
+    const waveLabels = this.gameData.waves.map(wave => `웨이브 ${wave.waveNumber}`);
+    const moneyData = this.gameData.waves.map(wave => wave.moneyAtEnd - wave.moneyAtStart);
+    
+    // 차트 생성
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: waveLabels,
+        datasets: [{
+          label: '자금 변화',
+          data: moneyData,
+          backgroundColor: moneyData.map(val => val >= 0 ? '#ffaa00' : '#ff0000'),
+          borderColor: moneyData.map(val => val >= 0 ? '#cc8800' : '#cc0000'),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          },
+          x: {
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#aaa'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff'
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * 업적 렌더링
+   */
+  renderAchievements() {
+    const achievements = this.generateAchievements();
+    const container = document.getElementById('achievementsList');
+    
+    // 이전 내용 제거
+    container.innerHTML = '';
+    
+    if (achievements.length === 0) {
+      container.innerHTML = '<div class="achievement-item"><div class="achievement-title">업적 없음</div><div class="achievement-description">다음 게임에서 도전해보세요!</div></div>';
+      return;
+    }
+    
+    // 업적 항목 생성
+    achievements.forEach(achievement => {
+      const achievementElem = document.createElement('div');
+      achievementElem.className = 'achievement-item';
+      
+      const titleElem = document.createElement('div');
+      titleElem.className = 'achievement-title';
+      titleElem.textContent = achievement.title;
+      
+      const descElem = document.createElement('div');
+      descElem.className = 'achievement-description';
+      descElem.textContent = achievement.description;
+      
+      achievementElem.appendChild(titleElem);
+      achievementElem.appendChild(descElem);
+      
+      if (achievement.highlight) {
+        const highlightElem = document.createElement('div');
+        highlightElem.className = 'achievement-highlight';
+        highlightElem.textContent = achievement.highlight;
+        achievementElem.appendChild(highlightElem);
+      }
+      
+      container.appendChild(achievementElem);
+    });
+  }
+  
+  /**
+   * 웨이브 선택기 초기화
+   */
+  initializeWaveSelector() {
+    const selector = document.getElementById('waveSelect');
+    selector.innerHTML = '';
+    
+    // 웨이브 옵션 추가
+    this.gameData.waves.forEach(wave => {
+      const option = document.createElement('option');
+      option.value = wave.waveNumber;
+      option.textContent = `웨이브 ${wave.waveNumber}`;
+      selector.appendChild(option);
+    });
+    
+    // 첫번째 웨이브 상세 정보 표시
+    if (this.gameData.waves.length > 0) {
+      this.showWaveDetails(this.gameData.waves[0].waveNumber);
+    }
+    
+    // 선택 이벤트 추가
+    selector.addEventListener('change', (e) => {
+      this.showWaveDetails(parseInt(e.target.value));
+    });
+  }
+  
+  /**
+   * 웨이브 상세 정보 표시
+   * @param {number} waveNumber - 웨이브 번호
+   */
+  showWaveDetails(waveNumber) {
+    const waveDetails = this.getWaveDetails(waveNumber);
+    const container = document.getElementById('waveDetailsContent');
+    
+    if (!waveDetails) {
+      container.innerHTML = '<div>선택한 웨이브의 데이터가 없습니다.</div>';
+      return;
+    }
+    
+    // 웨이브 상세 정보 표시
+    container.innerHTML = `
+      <div class="wave-stat">
+        <span class="wave-stat-label">웨이브 지속시간:</span>
+        <span>${waveDetails.duration}초</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">요격된 적 미사일:</span>
+        <span>${waveDetails.intercepted}개</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">지상 타격 미사일:</span>
+        <span>${waveDetails.groundHits}개</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">요격 성공률:</span>
+        <span>${waveDetails.interceptRate}%</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">발사한 방어 미사일:</span>
+        <span>${waveDetails.missilesFired}개</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">자금 변화:</span>
+        <span class="${waveDetails.moneyEarned >= 0 ? 'improvement' : 'decline'}">$${waveDetails.moneyEarned}</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">파괴된 건물:</span>
+        <span>${waveDetails.buildingsLost}개</span>
+      </div>
+      <div class="wave-stat">
+        <span class="wave-stat-label">도시 상태 변화:</span>
+        <span class="${waveDetails.buildingHealthChange >= 0 ? 'improvement' : 'decline'}">${waveDetails.buildingHealthChange}%</span>
+      </div>
+    `;
+  }
+  
+  /**
+   * 이전 게임과 비교 데이터 렌더링
+   */
+  renderComparisonData() {
+    const container = document.getElementById('comparisonDetails');
+    
+    if (!this.previousGameData) {
+      container.innerHTML = '<div class="comparison-item"><div class="comparison-title">이전 게임 데이터 없음</div><div class="achievement-description">첫 번째 게임을 완료했습니다. 다음 게임과 비교 데이터를 볼 수 있습니다.</div></div>';
+      return;
+    }
+    
+    // 비교 차트 렌더링
+    this.renderComparisonChart();
+    
+    // 비교 항목 준비
+    const comparisons = [
+      {
+        title: '웨이브 생존',
+        previous: this.previousGameData.waves.length,
+        current: this.gameData.waves.length,
+        unit: '웨이브'
+      },
+      {
+        title: '요격 성공률',
+        previous: this.calculateInterceptRate(this.previousGameData),
+        current: this.calculateInterceptRate(this.gameData),
+        unit: '%'
+      },
+      {
+        title: '도시 상태',
+        previous: this.previousGameData.waves.length > 0 ? this.previousGameData.waves[this.previousGameData.waves.length - 1].buildingsHealthAtEnd : 100,
+        current: this.getCurrentCityHealth(),
+        unit: '%'
+      },
+      {
+        title: '최종 점수',
+        previous: this.previousGameData.finalScore || 0,
+        current: this.gameData.finalScore,
+        unit: '점'
+      }
+    ];
+    
+    // 비교 항목 렌더링
+    container.innerHTML = '';
+    comparisons.forEach(item => {
+      const comparisonItem = document.createElement('div');
+      comparisonItem.className = 'comparison-item';
+      
+      const titleElem = document.createElement('div');
+      titleElem.className = 'comparison-title';
+      titleElem.textContent = item.title;
+      
+      const dataElem = document.createElement('div');
+      dataElem.className = 'comparison-data';
+      
+      const previousElem = document.createElement('div');
+      previousElem.className = 'comparison-previous';
+      previousElem.textContent = `이전: ${item.previous}${item.unit}`;
+      
+      const currentElem = document.createElement('div');
+      currentElem.className = 'comparison-current';
+      const diff = item.current - item.previous;
+      let diffText = '';
+      
+      if (diff > 0) {
+        diffText = ` (+${diff}${item.unit})`;
+        currentElem.classList.add('improvement');
+      } else if (diff < 0) {
+        diffText = ` (${diff}${item.unit})`;
+        currentElem.classList.add('decline');
+      }
+      
+      currentElem.textContent = `현재: ${item.current}${item.unit}${diffText}`;
+      
+      dataElem.appendChild(previousElem);
+      dataElem.appendChild(currentElem);
+      
+      comparisonItem.appendChild(titleElem);
+      comparisonItem.appendChild(dataElem);
+      
+      container.appendChild(comparisonItem);
+    });
+  }
+  
+  /**
+   * 요격 성공률 계산
+   * @param {Object} gameData - 게임 데이터 객체
+   * @returns {number} 요격 성공률 (백분율)
+   */
+  calculateInterceptRate(gameData) {
+    const total = gameData.totalIntercepted + gameData.totalGroundHits;
+    return total > 0 ? parseFloat(((gameData.totalIntercepted / total) * 100).toFixed(1)) : 0;
+  }
+  
+  /**
+   * 이전 게임과의 비교 차트 렌더링
+   */
+  renderComparisonChart() {
+    if (!this.previousGameData) return;
+    
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    
+    const data = {
+      labels: ['웨이브 수', '요격 수', '도시 상태 (%)', '점수'],
+      datasets: [
+        {
+          label: '이전 게임',
+          data: [
+            this.previousGameData.waves.length,
+            this.previousGameData.totalIntercepted,
+            this.previousGameData.waves.length > 0 ? this.previousGameData.waves[this.previousGameData.waves.length - 1].buildingsHealthAtEnd : 100,
+            this.previousGameData.finalScore || 0
+          ],
+          backgroundColor: 'rgba(128, 128, 255, 0.5)',
+          borderColor: 'rgba(128, 128, 255, 1)',
+          borderWidth: 1
+        },
+        {
+          label: '현재 게임',
+          data: [
+            this.gameData.waves.length,
+            this.gameData.totalIntercepted,
+            this.getCurrentCityHealth(),
+            this.gameData.finalScore
+          ],
+          backgroundColor: 'rgba(0, 255, 213, 0.5)',
+          borderColor: 'rgba(0, 255, 213, 1)',
+          borderWidth: 1
+        }
+      ]
+    };
+    
+    new Chart(ctx, {
+      type: 'radar',
+      data: data,
+      options: {
+        scales: {
+          r: {
+            angleLines: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            },
+            pointLabels: {
+              color: '#fff'
+            },
+            ticks: {
+              color: '#aaa',
+              backdropColor: 'transparent'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff'
+            }
+          }
+        },
+        elements: {
+          line: {
+            tension: 0.2
+          }
+        }
+      }
+    });
+  }
+}
+
+// 전역 PlayerHistoryVisualizer 인스턴스 생성
+let playerHistory = new PlayerHistoryVisualizer();
+
+// 재시작 버튼 이벤트 리스너
+document.getElementById('restartButtonEndGame').addEventListener('click', () => {
+    // 게임 종료 화면 숨기기
+    document.getElementById('endGameScreen').classList.remove('visible');
+    
+    // 게임 상태 초기화
+    isGameActive = false;
+    currentStage = 1;
+    gameTimer = 20;
+    isCooldown = false;
+    money = 250;
+    interceptedCount = 0;
+    groundHitsCount = 0;
+    enemyMissiles = [];
+    defenseMissiles = [];
+    launchers = [];
+    factories = [];
+    destroyedTotalHeight = 0;
+    destroyedBuildingCount = 0;
+    activeEffects = [];
+    window.destroyedHighBuildingCount = 0;
+    window.destroyedMidBuildingCount = 0;
+    window.destroyedLowBuildingCount = 0;
+    
+    // 게임 객체 정리
+    while(scene.children.length > 0){ 
+        const object = scene.children[0];
+        scene.remove(object);
+    }
+    
+    // 환경 요소 재생성
+    const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x009900, 0x009900);
+    scene.add(gridHelper);
+    
+    const groundHeight = 4;
+    const groundGeometry = new THREE.BoxGeometry(gridSize, groundHeight, gridSize);
+    const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.position.set(0, (-groundHeight / 2) - 0.05, 0);
+    scene.add(ground);
+    
+    // 조명 재생성
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    directionalLight.position.set(50, 100, 50);
+    scene.add(directionalLight);
+    
+    // 시작 버튼 표시
+    document.getElementById('startButton').style.display = 'block';
+    
+    console.log('게임 재시작 준비 완료');
+});

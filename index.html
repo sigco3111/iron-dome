@@ -91,6 +91,7 @@
         }
     }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script type="module" src="script.js"></script>
     <div id="SystemCards">
     </div>
@@ -123,10 +124,72 @@
 
     <div id="endGameScreen" class="end-game-screen">
         <h2 id="endGameTitle">임무 완료</h2>
-        <div class="end-game-stat">요격: <span id="finalIntercepted">0</span></div>
-        <div class="end-game-stat">실패: <span id="finalGroundHits">0</span></div>
-        <div class="end-game-stat">도시 상태: <span id="finalCityHealth">100%</span></div>
-        <button id="restartButtonEndGame">홈으로</button>
+        
+        <div class="end-game-stats">
+            <div class="end-game-stat">요격: <span id="finalIntercepted">0</span></div>
+            <div class="end-game-stat">실패: <span id="finalGroundHits">0</span></div>
+            <div class="end-game-stat">도시 상태: <span id="finalCityHealth">100%</span></div>
+            <div class="end-game-stat">점수: <span id="finalScore">0</span></div>
+        </div>
+        
+        <div class="player-history-tabs">
+            <button class="player-history-tab active" data-tab="performanceTab">성과 그래프</button>
+            <button class="player-history-tab" data-tab="achievementsTab">업적</button>
+            <button class="player-history-tab" data-tab="waveDetailsTab">웨이브 상세</button>
+            <button class="player-history-tab" data-tab="comparisonTab">이전 게임 비교</button>
+        </div>
+        
+        <div class="player-history-content">
+            <!-- 성과 그래프 탭 -->
+            <div class="player-history-panel active" id="performanceTab">
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <h3>웨이브별 요격 성공률</h3>
+                        <canvas id="interceptRateChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <h3>도시 건물 손실률</h3>
+                        <canvas id="buildingLossChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <h3>자원 관리 효율성</h3>
+                        <canvas id="resourceEfficiencyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 업적 탭 -->
+            <div class="player-history-panel" id="achievementsTab">
+                <div class="achievements-container">
+                    <h3>이번 게임 업적</h3>
+                    <div id="achievementsList" class="achievements-list"></div>
+                </div>
+            </div>
+            
+            <!-- 웨이브 상세 탭 -->
+            <div class="player-history-panel" id="waveDetailsTab">
+                <div class="wave-selector">
+                    <label for="waveSelect">웨이브 선택:</label>
+                    <select id="waveSelect"></select>
+                </div>
+                <div class="wave-details-container">
+                    <div id="waveDetailsContent"></div>
+                </div>
+            </div>
+            
+            <!-- 이전 게임 비교 탭 -->
+            <div class="player-history-panel" id="comparisonTab">
+                <div class="comparison-container">
+                    <h3>이전 게임과 비교</h3>
+                    <div class="comparison-chart-wrapper">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                    <div id="comparisonDetails" class="comparison-details"></div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="restartButtonEndGame" class="restart-button">홈으로</button>
     </div>
 
     <!-- 순위표 모달 제거됨 -->
