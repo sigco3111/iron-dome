@@ -54,6 +54,7 @@ let factories = [];
 let enemyMissiles = [];
 let defenseMissiles = [];
 let rangeVisualizer; // 방공영역 시각화 객체
+let upgradeSystem; // 업그레이드 시스템 객체
 let money = 250;
 let isGameActive = false;
 let isCooldown = false;
@@ -368,8 +369,16 @@ class MissileFactory {
     deliverMissile(launcher) {
         if (this.missiles <= 0 || launcher.missiles >= launcher.maxMissiles) return false;
 
-        // Check if player has enough money for delivery
-        const deliveryCost = 3;
+        // 배송 비용 계산 (업그레이드 효과 적용)
+        let deliveryCost = 3;
+        
+        // 배송 비용 감소 업그레이드가 있으면 적용
+        if (window.upgradeSystem) {
+            const deliveryCostReduction = window.upgradeSystem.calculateEffect('factory', 'deliveryCost');
+            deliveryCost = Math.max(1, Math.floor(deliveryCost - deliveryCostReduction)); // 최소 1원
+        }
+        
+        // 자금 확인
         if (money < deliveryCost) {
             showMessage(`미사일 배송 자금이 부족합니다! $${deliveryCost} 필요`, 3000);
             this.isDistributing = false;
@@ -849,6 +858,469 @@ class DefenseRangeVisualizer {
     } else {
       // 활성화되었던 방공영역 다시 표시
       this.updateAllRanges();
+    }
+  }
+}
+
+/**
+ * 게임 내 요소 업그레이드를 관리하는 클래스
+ * 발사대, 공장, 도시에 대한 업그레이드 항목들을 정의하고 효과를 적용합니다.
+ */
+class UpgradeSystem {
+  constructor() {
+    // 업그레이드 데이터 정의
+    this.upgrades = {
+      launcher: {
+        range: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [100, 200, 300], 
+          effect: [4, 8, 12],
+          title: '방어 범위',
+          description: '발사대의 탐지 및 방어 범위를 증가시킵니다.'
+        },
+        capacity: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [150, 250, 350], 
+          effect: [2, 3, 4],
+          title: '미사일 용량',
+          description: '발사대가 저장할 수 있는 최대 미사일 수를 증가시킵니다.'
+        },
+        reloadSpeed: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [120, 220, 320], 
+          effect: [0.1, 0.2, 0.3],
+          title: '발사 속도',
+          description: '발사대의 미사일 발사 속도를 향상시킵니다.'
+        }
+      },
+      factory: {
+        productionRate: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [100, 200, 300], 
+          effect: [0.1, 0.2, 0.3],
+          title: '생산 속도',
+          description: '공장의 미사일 생산 속도를 향상시킵니다.'
+        },
+        capacity: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [150, 250, 350], 
+          effect: [4, 8, 12],
+          title: '저장 용량',
+          description: '공장이 저장할 수 있는 최대 미사일 수를 증가시킵니다.'
+        },
+        deliveryCost: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [120, 220, 320], 
+          effect: [0.5, 1, 1.5],
+          title: '배송 비용',
+          description: '미사일 배송 비용을 감소시킵니다.'
+        }
+      },
+      city: {
+        buildingHealth: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [200, 300, 400], 
+          effect: [0.1, 0.2, 0.3],
+          title: '건물 내구도',
+          description: '도시 건물들의 내구도를 증가시킵니다.'
+        },
+        repairRate: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [250, 350, 450], 
+          effect: [0.05, 0.1, 0.15],
+          title: '복구 속도',
+          description: '손상된 건물의 자동 복구 속도를 증가시킵니다.'
+        },
+        income: { 
+          level: 0, 
+          maxLevel: 3, 
+          cost: [300, 400, 500], 
+          effect: [10, 20, 30],
+          title: '수입 증가',
+          description: '웨이브 완료 시 추가 수입을 제공합니다.'
+        }
+      }
+    };
+    
+    // 메뉴 열림 여부
+    this.isMenuOpen = false;
+  }
+
+  /**
+   * 업그레이드 가능 여부를 확인합니다.
+   * @param {string} category - 업그레이드 카테고리 (launcher, factory, city)
+   * @param {string} type - 업그레이드 유형 (range, capacity 등)
+   * @param {number} money - 현재 보유 자금
+   * @returns {boolean} 업그레이드 가능 여부
+   */
+  canUpgrade(category, type, money) {
+    const upgrade = this.upgrades[category][type];
+    
+    // 최대 레벨 확인
+    if (upgrade.level >= upgrade.maxLevel) {
+      return false;
+    }
+    
+    // 비용 확인
+    const cost = upgrade.cost[upgrade.level];
+    if (money < cost) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * 업그레이드를 적용합니다.
+   * @param {string} category - 업그레이드 카테고리 (launcher, factory, city)
+   * @param {string} type - 업그레이드 유형 (range, capacity 등)
+   * @param {number} money - 현재 보유 자금
+   * @returns {Object|boolean} - 성공 시 {success: true, cost: 비용}, 실패 시 false
+   */
+  applyUpgrade(category, type, money) {
+    if (!this.canUpgrade(category, type, money)) {
+      return false;
+    }
+    
+    const upgrade = this.upgrades[category][type];
+    const cost = upgrade.cost[upgrade.level];
+    
+    // 레벨 증가
+    upgrade.level++;
+    
+    // 효과 적용
+    this.applyUpgradeEffect(category, type);
+    
+    return { success: true, cost: cost };
+  }
+
+  /**
+   * 업그레이드 효과를 게임 객체에 적용합니다.
+   * @param {string} category - 업그레이드 카테고리
+   * @param {string} type - 업그레이드 유형
+   */
+  applyUpgradeEffect(category, type) {
+    const upgrade = this.upgrades[category][type];
+    const effect = upgrade.effect[upgrade.level - 1];
+    
+    if (category === 'launcher') {
+      // 발사대 업그레이드 효과
+      launchers.forEach(launcher => {
+        if (type === 'range') {
+          launcher.updateRange(difficultySettings[DIFFICULTY].range + effect);
+        } else if (type === 'capacity') {
+          launcher.maxMissiles += effect;
+        } else if (type === 'reloadSpeed') {
+          // 발사 속도 향상 효과는 미사일 발사 로직에서 처리
+        }
+      });
+    } else if (category === 'factory') {
+      // 공장 업그레이드 효과
+      factories.forEach(factory => {
+        if (type === 'productionRate') {
+          factory.productionRate = Math.floor(3000 * (1 - effect));
+        } else if (type === 'capacity') {
+          factory.maxMissiles += effect;
+        } else if (type === 'deliveryCost') {
+          // 배송 비용 감소 효과는 deliverMissile 함수에서 처리
+        }
+      });
+    } else if (category === 'city') {
+      // 도시 업그레이드 효과 (추후 구현)
+    }
+  }
+
+  /**
+   * 현재 업그레이드 효과를 계산합니다.
+   * @param {string} category - 업그레이드 카테고리
+   * @param {string} type - 업그레이드 유형
+   * @returns {number} 현재 효과 값
+   */
+  calculateEffect(category, type) {
+    const upgrade = this.upgrades[category][type];
+    let totalEffect = 0;
+    
+    for (let i = 0; i < upgrade.level; i++) {
+      totalEffect += upgrade.effect[i];
+    }
+    
+    return totalEffect;
+  }
+  
+  /**
+   * 업그레이드 메뉴를 생성하고 표시합니다.
+   */
+  showUpgradeMenu() {
+    if (this.isMenuOpen) return;
+    
+    // 게임 일시정지
+    this.pauseGame();
+    
+    // 메뉴 컨테이너 생성
+    const menuContainer = document.createElement('div');
+    menuContainer.id = 'upgradeMenu';
+    menuContainer.className = 'upgrade-menu';
+    
+    // 메뉴 제목
+    const title = document.createElement('h2');
+    title.textContent = '업그레이드 메뉴';
+    menuContainer.appendChild(title);
+    
+    // 탭 메뉴
+    const tabContainer = document.createElement('div');
+    tabContainer.className = 'tab-container';
+    tabContainer.style.width = '100%'; // 너비 100%로 설정
+    
+    const categories = {
+      'launcher': '발사대',
+      'factory': '공장',
+      'city': '도시'
+    };
+    
+    // 탭 버튼 생성
+    Object.keys(categories).forEach((category, index) => {
+      const tabButton = document.createElement('button');
+      tabButton.className = 'tab-button' + (index === 0 ? ' active' : '');
+      tabButton.textContent = categories[category];
+      tabButton.dataset.category = category;
+      tabButton.style.flex = '1'; // 버튼이 동일한 너비를 갖도록 설정
+      tabButton.addEventListener('click', (e) => this.switchTab(e.target.dataset.category));
+      tabContainer.appendChild(tabButton);
+    });
+    menuContainer.appendChild(tabContainer);
+    
+    // 업그레이드 항목 컨테이너
+    const upgradeItemsContainer = document.createElement('div');
+    upgradeItemsContainer.id = 'upgradeItems';
+    upgradeItemsContainer.className = 'upgrade-items';
+    menuContainer.appendChild(upgradeItemsContainer);
+    
+    // 닫기 버튼
+    const closeButton = document.createElement('button');
+    closeButton.className = 'close-button';
+    closeButton.textContent = '닫기';
+    closeButton.addEventListener('click', () => this.hideUpgradeMenu());
+    menuContainer.appendChild(closeButton);
+    
+    // 메뉴를 body에 추가
+    document.body.appendChild(menuContainer);
+    
+    // 초기 탭 표시
+    this.switchTab('launcher');
+    
+    // 메뉴 상태 업데이트
+    this.isMenuOpen = true;
+  }
+  
+  /**
+   * 업그레이드 메뉴를 숨깁니다.
+   */
+  hideUpgradeMenu() {
+    try {
+      const menu = document.getElementById('upgradeMenu');
+      if (menu) {
+        menu.classList.add('fade-out');
+        
+        // 페이드 아웃 애니메이션 후 제거
+        setTimeout(() => {
+          if (menu.parentNode) {
+            menu.remove();
+          }
+          // 게임 재개
+          this.resumeGame();
+        }, 300);
+      } else {
+        // 메뉴가 없으면 바로 게임 재개
+        this.resumeGame();
+      }
+      
+      this.isMenuOpen = false;
+    } catch (error) {
+      console.error('업그레이드 메뉴 닫기 오류:', error);
+      // 오류 발생 시 강제로 게임 재개
+      this.resumeGame();
+      this.isMenuOpen = false;
+    }
+  }
+  
+  /**
+   * 지정된 카테고리의 탭으로 전환합니다.
+   * @param {string} category - 표시할 카테고리 (launcher, factory, city)
+   */
+  switchTab(category) {
+    // 활성 탭 버튼 갱신
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.category === category);
+    });
+    
+    // 업그레이드 항목 생성
+    const upgradeItems = document.getElementById('upgradeItems');
+    upgradeItems.innerHTML = '';
+    
+    // 선택된 카테고리의 업그레이드 항목 표시
+    const categoryUpgrades = this.upgrades[category];
+    
+    Object.entries(categoryUpgrades).forEach(([type, data]) => {
+      const item = document.createElement('div');
+      item.className = 'upgrade-item';
+      
+      // 업그레이드 정보
+      const info = document.createElement('div');
+      info.className = 'upgrade-info';
+      
+      // 제목 및 설명
+      const itemTitle = document.createElement('h3');
+      itemTitle.textContent = data.title;
+      info.appendChild(itemTitle);
+      
+      const itemDesc = document.createElement('p');
+      itemDesc.className = 'description';
+      itemDesc.textContent = data.description;
+      info.appendChild(itemDesc);
+      
+      // 레벨 표시
+      const levelContainer = document.createElement('div');
+      levelContainer.className = 'level-container';
+      
+      const levelLabel = document.createElement('span');
+      levelLabel.textContent = '레벨: ';
+      levelContainer.appendChild(levelLabel);
+      
+      for (let i = 0; i < data.maxLevel; i++) {
+        const levelDot = document.createElement('span');
+        levelDot.className = 'level-dot' + (i < data.level ? ' filled' : '');
+        levelContainer.appendChild(levelDot);
+      }
+      
+      info.appendChild(levelContainer);
+      item.appendChild(info);
+      
+      // 효과 및 비용 정보
+      const effectCost = document.createElement('div');
+      effectCost.className = 'effect-cost';
+      
+      // 효과
+      let effectText = '';
+      if (type === 'range') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `+${effect}`;
+      } else if (type === 'capacity') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `+${effect}`;
+      } else if (type === 'reloadSpeed') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `${effect * 100}% 증가`;
+      } else if (type === 'productionRate') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `${effect * 100}% 증가`;
+      } else if (type === 'deliveryCost') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `-$${effect}`;
+      } else if (type === 'buildingHealth') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `${effect * 100}% 증가`;
+      } else if (type === 'repairRate') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `${effect * 100}% 증가`;
+      } else if (type === 'income') {
+        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
+        effectText = `+$${effect}`;
+      }
+      
+      const effect = document.createElement('div');
+      effect.className = 'effect';
+      effect.textContent = `효과: ${effectText}`;
+      effectCost.appendChild(effect);
+      
+      // 비용
+      const costValue = data.level < data.maxLevel ? data.cost[data.level] : '최대';
+      const cost = document.createElement('div');
+      cost.className = 'cost';
+      cost.textContent = `비용: ${costValue === '최대' ? '최대' : '$' + costValue}`;
+      effectCost.appendChild(cost);
+      
+      item.appendChild(effectCost);
+      
+      // 업그레이드 버튼
+      const upgradeButton = document.createElement('button');
+      upgradeButton.className = 'upgrade-button';
+      upgradeButton.textContent = data.level < data.maxLevel ? '업그레이드' : '최대 레벨';
+      upgradeButton.disabled = data.level >= data.maxLevel || money < costValue;
+      
+      // 버튼 비활성화 스타일
+      if (upgradeButton.disabled) {
+        upgradeButton.classList.add('disabled');
+      }
+      
+      upgradeButton.addEventListener('click', () => this.onUpgradeButtonClick(category, type));
+      item.appendChild(upgradeButton);
+      
+      upgradeItems.appendChild(item);
+    });
+  }
+  
+  /**
+   * 업그레이드 버튼 클릭 처리
+   * @param {string} category - 업그레이드 카테고리
+   * @param {string} type - 업그레이드 유형
+   */
+  onUpgradeButtonClick(category, type) {
+    const result = this.applyUpgrade(category, type, money);
+    
+    if (result && result.success) {
+      // 자금 차감
+      money -= result.cost;
+      document.getElementById('money').textContent = money;
+      
+      // 시각적 효과 및 알림
+      showMessage(`${this.upgrades[category][type].title} 업그레이드 성공! (레벨 ${this.upgrades[category][type].level})`, 2000);
+      
+      // 메뉴 갱신
+      this.switchTab(category);
+    } else {
+      // 업그레이드 실패 메시지
+      if (this.upgrades[category][type].level >= this.upgrades[category][type].maxLevel) {
+        showMessage('이미 최대 레벨입니다!', 2000);
+      } else {
+        showMessage('자금이 부족합니다!', 2000);
+      }
+    }
+  }
+  
+  /**
+   * 게임 일시정지
+   */
+  pauseGame() {
+    // 기존 게임 상태 저장
+    this.previousGameState = isGameActive;
+    isGameActive = false;
+    
+    // 오버레이 생성
+    const overlay = document.createElement('div');
+    overlay.id = 'pauseOverlay';
+    overlay.className = 'pause-overlay';
+    document.body.appendChild(overlay);
+  }
+  
+  /**
+   * 게임 재개
+   */
+  resumeGame() {
+    // 게임 상태 복원
+    isGameActive = this.previousGameState;
+    
+    // 오버레이 제거
+    const overlay = document.getElementById('pauseOverlay');
+    if (overlay) {
+      overlay.remove();
     }
   }
 }
@@ -1768,6 +2240,10 @@ document.getElementById('startButton').addEventListener('click', () => {
         // 방공영역 시각화 객체 초기화
         rangeVisualizer = new DefenseRangeVisualizer();
         
+        // 업그레이드 시스템 초기화
+        upgradeSystem = new UpgradeSystem();
+        window.upgradeSystem = upgradeSystem; // 전역에서 접근 가능하도록 설정
+        
         document.getElementById('startButton').style.display = 'none';
         document.getElementById('settingsMenu').style.display = 'none';
         
@@ -1796,7 +2272,15 @@ document.getElementById('startButton').addEventListener('click', () => {
 
 document.getElementById('settingsButton').addEventListener('click', () => {
     const menu = document.getElementById('settingsMenu');
-    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    const isMenuVisible = menu.style.display === 'block';
+    
+    // 메뉴 표시/숨김 처리
+    menu.style.display = isMenuVisible ? 'none' : 'block';
+    
+    // 메뉴가 표시될 때 방공영역 설정 이벤트 리스너 초기화
+    if (!isMenuVisible) {
+        initializeRangeVisualizerSettings();
+    }
 });
 
 // Difficulty buttons
@@ -1878,6 +2362,21 @@ function setupPurchaseButtons() {
     `;
     launcherButton.addEventListener('click', () => selectItem('launcher'));
     container.appendChild(launcherButton);
+    
+    // Upgrade button
+    const upgradeButton = document.createElement('div');
+    upgradeButton.className = 'purchase-button upgrade-card';
+    upgradeButton.innerHTML = `
+        <div>⬆️</div>
+        <div>업그레이드</div>
+        <div>메뉴</div>
+    `;
+    upgradeButton.addEventListener('click', () => {
+        if (upgradeSystem) {
+            upgradeSystem.showUpgradeMenu();
+        }
+    });
+    container.appendChild(upgradeButton);
 
     // Start Wave button
     const startWaveButton = document.createElement('div');
@@ -1895,45 +2394,81 @@ function setupPurchaseButtons() {
  * 방공영역 시각화 설정을 초기화합니다.
  */
 function initializeRangeVisualizerSettings() {
-    // 방공영역 표시 버튼 이벤트 처리
-    document.querySelectorAll('#rangeVisualizationButtons .setting-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const value = button.getAttribute('data-value');
-            const showRanges = value === 'ON';
+    try {
+        // 방공영역 표시 버튼 이벤트 처리
+        const rangeButtons = document.querySelectorAll('#rangeVisualizationButtons .setting-button');
+        rangeButtons.forEach(button => {
+            // 기존 이벤트 리스너 제거 (중복 방지)
+            button.removeEventListener('click', handleRangeButtonClick);
             
-            // UI 업데이트
-            document.querySelectorAll('#rangeVisualizationButtons .setting-button').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            button.classList.add('selected');
-            
-            // 시각화 설정 업데이트
-            if (rangeVisualizer) {
-                const showOverlaps = document.querySelector('#overlapVisualizationButtons .selected').getAttribute('data-value') === 'ON';
-                rangeVisualizer.updateSettings(showRanges, showOverlaps);
-            }
+            // 새 이벤트 리스너 추가
+            button.addEventListener('click', handleRangeButtonClick);
         });
-    });
-    
-    // 중첩 영역 표시 버튼 이벤트 처리
-    document.querySelectorAll('#overlapVisualizationButtons .setting-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const value = button.getAttribute('data-value');
-            const showOverlaps = value === 'ON';
+        
+        // 중첩 영역 표시 버튼 이벤트 처리
+        const overlapButtons = document.querySelectorAll('#overlapVisualizationButtons .setting-button');
+        overlapButtons.forEach(button => {
+            // 기존 이벤트 리스너 제거 (중복 방지)
+            button.removeEventListener('click', handleOverlapButtonClick);
             
-            // UI 업데이트
-            document.querySelectorAll('#overlapVisualizationButtons .setting-button').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            button.classList.add('selected');
-            
-            // 시각화 설정 업데이트
-            if (rangeVisualizer) {
-                const showRanges = document.querySelector('#rangeVisualizationButtons .selected').getAttribute('data-value') === 'ON';
-                rangeVisualizer.updateSettings(showRanges, showOverlaps);
-            }
+            // 새 이벤트 리스너 추가
+            button.addEventListener('click', handleOverlapButtonClick);
         });
-    });
+        
+        console.log('방공영역 설정 초기화 완료:', rangeButtons.length, '개의 범위 버튼,', overlapButtons.length, '개의 중첩 버튼');
+    } catch (error) {
+        console.error('방공영역 설정 초기화 중 오류 발생:', error);
+    }
+}
+
+// 방공영역 표시 버튼 클릭 핸들러
+function handleRangeButtonClick(event) {
+    try {
+        const button = event.currentTarget;
+        const value = button.getAttribute('data-value');
+        const showRanges = value === 'ON';
+        
+        // UI 업데이트
+        document.querySelectorAll('#rangeVisualizationButtons .setting-button').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        button.classList.add('selected');
+        
+        // 시각화 설정 업데이트
+        if (rangeVisualizer) {
+            const overlapButton = document.querySelector('#overlapVisualizationButtons .selected');
+            const showOverlaps = overlapButton ? overlapButton.getAttribute('data-value') === 'ON' : true;
+            rangeVisualizer.updateSettings(showRanges, showOverlaps);
+            console.log('방공영역 표시 설정 변경:', showRanges);
+        }
+    } catch (error) {
+        console.error('방공영역 표시 버튼 처리 중 오류 발생:', error);
+    }
+}
+
+// 중첩 영역 표시 버튼 클릭 핸들러
+function handleOverlapButtonClick(event) {
+    try {
+        const button = event.currentTarget;
+        const value = button.getAttribute('data-value');
+        const showOverlaps = value === 'ON';
+        
+        // UI 업데이트
+        document.querySelectorAll('#overlapVisualizationButtons .setting-button').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        button.classList.add('selected');
+        
+        // 시각화 설정 업데이트
+        if (rangeVisualizer) {
+            const rangeButton = document.querySelector('#rangeVisualizationButtons .selected');
+            const showRanges = rangeButton ? rangeButton.getAttribute('data-value') === 'ON' : true;
+            rangeVisualizer.updateSettings(showRanges, showOverlaps);
+            console.log('중첩 영역 표시 설정 변경:', showOverlaps);
+        }
+    } catch (error) {
+        console.error('중첩 영역 표시 버튼 처리 중 오류 발생:', error);
+    }
 }
 
 /**
@@ -2028,6 +2563,11 @@ function onMouseClickForRange(event) {
 // 마우스 이벤트 리스너 추가
 window.addEventListener('mousemove', onMouseMove);
 window.addEventListener('click', onMouseClickForRange);
+
+// 페이지 로드 시 설정 메뉴 초기화
+document.addEventListener('DOMContentLoaded', () => {
+    initializeRangeVisualizerSettings();
+});
 
 function selectItem(itemType) {
     selectedItem = itemType;
