@@ -1,0 +1,32 @@
+update() {
+    // Ensure the velocity magnitude matches the type-specific speed
+    const currentSpeed = this.speed * (60); // Adjust for frame rate
+    
+    // Update position based on velocity and speed
+    this.velocity.normalize().multiplyScalar(currentSpeed);
+    this.position.add(this.velocity.clone());
+    
+    this.mesh.position.copy(this.position);
+
+    this.trailPoints.push(this.position.clone());
+    if (this.trailPoints.length > 120) this.trailPoints.shift();
+    this.trail.geometry.setFromPoints(this.trailPoints);
+
+    // 건물과 충돌
+    const buildings = scene.getObjectByProperty('type', 'Group').children;
+    for (const building of buildings) {
+        if (!(building instanceof Building)) continue;
+
+        const box = new THREE.Box3().setFromObject(building);
+        if (box.containsPoint(this.position)) {
+            this.explode();
+            return true;
+        }
+    }
+
+    if (this.position.y <= 0) {
+        this.explode();
+        return true;
+    }
+    return false;
+}

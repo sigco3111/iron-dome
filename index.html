@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아이언돔 (Iron Dome)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="gameStatsUI" class="stats-panel">
+        <div class="stat-item">
+            <span class="stat-label">웨이브:</span>
+            <span class="stat-value" id="stage">0</span>
+            <span class="stat-label">(</span>
+            <span class="stat-value" id="timeDisplay">20초</span>
+            <span class="stat-label">)</span>
+        </div>
+        <div class="stat-item" style="display:none">
+            <span class="stat-label">요격:</span>
+            <span class="stat-value" id="intercepted">0</span>
+        </div>
+        <div class="stat-item" style="display:none">
+            <span class="stat-label">실패:</span>
+            <span class="stat-value" id="groundHits">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">도시:</span>
+            <span class="stat-value" id="cityHealth">0 (100.00%)</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">자금:</span>
+            <span class="stat-value" id="money">250</span>
+        </div>
+        <button id="settingsButton">
+        ⚙️
+        </button>
+    </div>
+    <div id="cooldown">
+        <span id="cooldownTime">5</span>
+    </div>
+
+    <div id="settingsMenu">
+        <h2>게임 설정</h2>
+        <div class="setting-group">
+            <!-- difficulty settings -->
+            <label>난이도:</label>
+            <div id="difficultyButtons">
+                <button class="setting-button" data-setting-type="difficulty" data-value="EASY">쉬움</button>
+                <button class="setting-button selected" data-setting-type="difficulty"
+                    data-value="NORMAL">보통</button>
+                <button class="setting-button " data-setting-type="difficulty" data-value="HARD">어려움</button>
+            </div>
+            <br>
+            <!-- visual effects quality -->
+            <label>시각 효과:</label>
+
+            <div id="effectsButtons">
+                <button class="setting-button selected" data-setting-type="effects" data-value="HIGH">높음</button>
+                <button class="setting-button" data-setting-type="effects" data-value="MEDIUM">보통</button>
+                <button class="setting-button" data-setting-type="effects" data-value="LOW">낮음</button>
+            </div>
+
+        </div>
+    </div>
+    <div class="button-wrapper"> 
+    <button id="startButton" class="unified-button">게임 시작</button>
+    
+    <button id="leaderboardButton" class="unified-button">순위표</button>
+   
+    </div>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "gsap": "https://unpkg.com/gsap@3.12.4/index.js"
+        }
+    }
+    </script>
+    <script type="module" src="script.js"></script>
+    <div id="SystemCards">
+    </div>
+
+    <div id="placementMessage">
+        그리드를 클릭하여 선택한 아이템을 배치하세요.
+    </div>
+
+    <div id="launcherStats" class="stats-panel">
+        <div id="launcherStatsSection">
+            <div><span class="stat-label">난이도:</span> <span class="stat-value" id="difficultyDisplay">어려움</span></div>
+            <div><span class="stat-label">탐지 범위:</span> <span class="stat-value" id="rangeValue">36</span> 유닛</div>
+            <div><span class="stat-label">요격:</span> <span class="stat-value" id="interceptedRange">0</span></div>
+            <div><span class="stat-label">실패:</span> <span class="stat-value" id="missedRange">0</span></div>
+            <div><span class="stat-label">도시:</span> <span class="stat-value" id="cityHealthRange" data-tooltip=""> 100.00%</span></div>
+        </div>
+        <div class="stats-divider"></div>
+        <div id="buildingsStatsSection">
+            <div><span class="stat-label">건물:</span> <span class="stat-value" id="buildingsCount">0/0</span></div>
+            <div class="building-stats-list">
+                <div><span class="stat-label">고층:</span> <span class="stat-value" id="highBuildings">0/0</span></div>
+                <div><span class="stat-label">중층:</span> <span class="stat-value" id="midBuildings">0/0</span></div>
+                <div><span class="stat-label">저층:</span> <span class="stat-value" id="lowBuildings">0/0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="logMessage"></div>
+    
+
+    <div id="endGameScreen" class="end-game-screen">
+        <h2 id="endGameTitle">임무 완료</h2>
+        <div class="end-game-stat">요격: <span id="finalIntercepted">0</span></div>
+        <div class="end-game-stat">실패: <span id="finalGroundHits">0</span></div>
+        <div class="end-game-stat">도시 상태: <span id="finalCityHealth">100%</span></div>
+        <button id="restartButtonEndGame">홈으로</button>
+    </div>
+
+    <div id="leaderboardModal" class="leaderboard-modal">
+        <div class="leaderboard-content">
+            <div class="leaderboard-header">
+                <h2>Mission Leaderboard</h2>
+                <button id="closeLeaderboard" class="close-button">&times;</button>
+            </div>
+            <div class="leaderboard-tabs">
+                <button class="tab-button active" data-tab="cleared">Cleared Missions</button>
+                <button class="tab-button" data-tab="failed">Failed Attempts</button>
+                <button class="tab-button" data-tab="stats">Statistics</button>
+            </div>
+            <div class="leaderboard-body">
+                <div id="clearedTab" class="tab-content active">
+                    <div class="records-list" id="clearedRecords">Loading...</div>
+                </div>
+                <div id="failedTab" class="tab-content">
+                    <div class="records-list" id="failedRecords">Loading...</div>
+                </div>
+                <div id="statsTab" class="tab-content">
+                    <div class="stats-grid" id="gameStats">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
