@@ -1,0 +1,7 @@
+::1 - - [23/Jul/2025 14:45:19] "GET / HTTP/1.1" 200 -
+::1 - - [23/Jul/2025 14:45:19] "GET /script.js HTTP/1.1" 200 -
+::1 - - [23/Jul/2025 14:45:19] "GET /style.css HTTP/1.1" 200 -
+::1 - - [23/Jul/2025 14:45:20] code 404, message File not found
+::1 - - [23/Jul/2025 14:45:20] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [23/Jul/2025 14:48:34] "GET / HTTP/1.1" 304 -
+::1 - - [23/Jul/2025 14:48:34] "GET /script.js HTTP/1.1" 200 -

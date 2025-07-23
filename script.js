@@ -377,7 +377,6 @@ class MissileFactory {
 
         money -= deliveryCost;
         document.getElementById('money').textContent = money;
-        this.showFloatingTextAt(this.position, '-$3', '#ff3333');
 
         this.missiles--; // Decrement count immediately
 
@@ -482,37 +481,7 @@ class MissileFactory {
         });
     }
 
-    showFloatingTextAt(worldPosition, text, color = '#ffffff') {
-        const label = document.createElement('div');
-        label.textContent = text;
-        label.style.position = 'fixed';
-        label.style.color = color;
-        label.style.fontFamily = 'Arial, sans-serif';
-        label.style.fontSize = '14px';
-        label.style.fontWeight = 'bold';
-        label.style.pointerEvents = 'none';
-        label.style.zIndex = '1001';
-        label.style.textShadow = '1px 1px 2px black';
-        document.body.appendChild(label);
-
-        const vector = worldPosition.clone();
-        vector.y += 2;
-        vector.project(camera);
-        const x = (vector.x + 1) * window.innerWidth / 2;
-        const y = (-vector.y + 1) * window.innerHeight / 2;
-
-        label.style.left = x + 'px';
-        label.style.top = y + 'px';
-        label.style.transform = 'translate(-50%, -50%)';
-
-        gsap.to(label, {
-            y: y - 30,
-            opacity: 0,
-            duration: 1.5,
-            ease: "power2.out",
-            onComplete: () => document.body.removeChild(label)
-        });
-    }
+    // 점수 표시 이펙트 제거됨
 
     damage(amount) {
         this.health = Math.max(0, this.health - amount);
@@ -978,9 +947,6 @@ class DefenseMissile {
                 money += bonus;
                 document.getElementById('money').textContent = money;
                 
-                // Show floating bonus text
-                this.showFloatingTextAt(this.position, `+$${bonus}`, '#00ff00');
-                
                 // Create explosion effect
                 this.createExplosion();
                 enemy.cleanup();
@@ -1038,41 +1004,7 @@ class DefenseMissile {
         });
     }
 
-    showFloatingTextAt(worldPosition, text, color = '#ffffff') {
-        const label = document.createElement('div');
-        label.textContent = text;
-        label.style.position = 'fixed';
-        label.style.color = color;
-        label.style.fontFamily = 'Arial, sans-serif';
-        label.style.fontSize = '16px';
-        label.style.fontWeight = 'bold';
-        label.style.pointerEvents = 'none';
-        label.style.zIndex = '1001';
-        label.style.textShadow = '1px 1px 2px black';
-        document.body.appendChild(label);
-
-        const vector = worldPosition.clone();
-        vector.y += 2;
-        vector.project(camera);
-        const x = (vector.x + 1) * window.innerWidth / 2;
-        const y = (-vector.y + 1) * window.innerHeight / 2;
-
-        label.style.left = x + 'px';
-        label.style.top = y + 'px';
-        label.style.transform = 'translate(-50%, -50%)';
-
-        gsap.to(label, {
-            y: y - 40,
-            opacity: 0,
-            duration: 2,
-            ease: "power2.out",
-            onComplete: () => {
-                if (label.parentNode) {
-                    document.body.removeChild(label);
-                }
-            }
-        });
-    }
+    // 점수 표시 이펙트 제거됨
 
     cleanup() {
         scene.remove(this.mesh);
