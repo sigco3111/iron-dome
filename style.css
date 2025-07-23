@@ -896,26 +896,45 @@ body.blurred-background {
     align-items: center;
     gap: 5px;
     margin-top: 5px;
+    width: 100%;
 }
 
-.level-dot {
-    width: 12px;
+/* 10단계 업그레이드를 위한 진행 바 스타일 */
+.level-progress-bar {
+    flex-grow: 1;
     height: 12px;
-    border-radius: 50%;
+    background-color: rgba(0, 255, 0, 0.2);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-left: 5px;
     border: 1px solid #00ff00;
-    background-color: transparent;
 }
 
-.level-dot.filled {
+.level-progress {
+    height: 100%;
     background-color: #00ff00;
+    border-radius: 6px;
+    transition: width 0.3s ease-in-out;
 }
 
 .effect-cost {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 8px;
     font-size: 14px;
     color: #ffffff;
     width: 100%;
+}
+
+.effect {
+    color: #00ffff; /* 청록색으로 효과 텍스트 강조 */
+    padding: 5px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.cost {
+    color: #ffcc00; /* 노란색으로 비용 텍스트 강조 */
 }
 
 .upgrade-button {

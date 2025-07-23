@@ -873,30 +873,30 @@ class DefenseRangeVisualizer {
  */
 class UpgradeSystem {
   constructor() {
-    // 업그레이드 데이터 정의
+    // 업그레이드 데이터 정의 - 10단계로 확장
     this.upgrades = {
       launcher: {
         range: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [100, 200, 300], 
-          effect: [4, 8, 12],
+          maxLevel: 10, 
+          cost: [100, 150, 200, 250, 350, 500, 650, 800, 1000, 1250], 
+          effect: [2, 4, 6, 8, 10, 12, 15, 18, 21, 25],
           title: '방어 범위',
           description: '발사대의 탐지 및 방어 범위를 증가시킵니다.'
         },
         capacity: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [150, 250, 350], 
-          effect: [2, 3, 4],
+          maxLevel: 10, 
+          cost: [150, 200, 250, 350, 450, 550, 650, 800, 950, 1200], 
+          effect: [1, 2, 3, 4, 5, 6, 8, 10, 12, 15],
           title: '미사일 용량',
           description: '발사대가 저장할 수 있는 최대 미사일 수를 증가시킵니다.'
         },
         reloadSpeed: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [120, 220, 320], 
-          effect: [0.1, 0.2, 0.3],
+          maxLevel: 10, 
+          cost: [120, 180, 240, 300, 400, 500, 650, 800, 950, 1100], 
+          effect: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6],
           title: '발사 속도',
           description: '발사대의 미사일 발사 속도를 향상시킵니다.'
         }
@@ -904,25 +904,25 @@ class UpgradeSystem {
       factory: {
         productionRate: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [100, 200, 300], 
-          effect: [0.1, 0.2, 0.3],
+          maxLevel: 10, 
+          cost: [100, 150, 200, 300, 400, 500, 600, 750, 900, 1100], 
+          effect: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7],
           title: '생산 속도',
           description: '공장의 미사일 생산 속도를 향상시킵니다.'
         },
         capacity: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [150, 250, 350], 
-          effect: [4, 8, 12],
+          maxLevel: 10, 
+          cost: [150, 200, 300, 400, 500, 600, 750, 900, 1050, 1200], 
+          effect: [2, 4, 6, 8, 10, 15, 20, 25, 30, 40],
           title: '저장 용량',
           description: '공장이 저장할 수 있는 최대 미사일 수를 증가시킵니다.'
         },
         deliveryCost: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [120, 220, 320], 
-          effect: [0.5, 1, 1.5],
+          maxLevel: 10, 
+          cost: [120, 180, 240, 320, 400, 500, 600, 750, 900, 1050], 
+          effect: [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5],
           title: '배송 비용',
           description: '미사일 배송 비용을 감소시킵니다.'
         }
@@ -930,25 +930,25 @@ class UpgradeSystem {
       city: {
         buildingHealth: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [200, 300, 400], 
-          effect: [0.1, 0.2, 0.3],
+          maxLevel: 10, 
+          cost: [200, 250, 300, 400, 500, 650, 800, 950, 1100, 1300], 
+          effect: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75],
           title: '건물 내구도',
           description: '도시 건물들의 내구도를 증가시킵니다.'
         },
         repairRate: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [250, 350, 450], 
-          effect: [0.05, 0.1, 0.15],
+          maxLevel: 10, 
+          cost: [250, 300, 350, 450, 550, 650, 800, 950, 1100, 1300], 
+          effect: [0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5],
           title: '복구 속도',
           description: '손상된 건물의 자동 복구 속도를 증가시킵니다.'
         },
         income: { 
           level: 0, 
-          maxLevel: 3, 
-          cost: [300, 400, 500], 
-          effect: [10, 20, 30],
+          maxLevel: 10, 
+          cost: [300, 350, 400, 500, 600, 750, 900, 1050, 1200, 1500], 
+          effect: [10, 15, 20, 30, 40, 55, 70, 85, 100, 120],
           title: '수입 증가',
           description: '웨이브 완료 시 추가 수입을 제공합니다.'
         }
@@ -1019,7 +1019,8 @@ class UpgradeSystem {
    */
   applyUpgradeEffect(category, type) {
     const upgrade = this.upgrades[category][type];
-    const effect = upgrade.effect[upgrade.level - 1];
+    const currentLevel = upgrade.level;
+    const effect = upgrade.effect[currentLevel - 1]; // 현재 레벨의 효과 적용
     
     if (category === 'launcher') {
       // 발사대 업그레이드 효과
@@ -1058,6 +1059,7 @@ class UpgradeSystem {
     const upgrade = this.upgrades[category][type];
     let totalEffect = 0;
     
+    // 현재까지의 모든 레벨 효과 합산
     for (let i = 0; i < upgrade.level; i++) {
       totalEffect += upgrade.effect[i];
     }
@@ -1196,19 +1198,24 @@ class UpgradeSystem {
       itemDesc.textContent = data.description;
       info.appendChild(itemDesc);
       
-      // 레벨 표시
+      // 레벨 표시 (10단계에 맞게 수정)
       const levelContainer = document.createElement('div');
       levelContainer.className = 'level-container';
       
       const levelLabel = document.createElement('span');
-      levelLabel.textContent = '레벨: ';
+      levelLabel.textContent = `레벨: ${data.level}/${data.maxLevel} `;
       levelContainer.appendChild(levelLabel);
       
-      for (let i = 0; i < data.maxLevel; i++) {
-        const levelDot = document.createElement('span');
-        levelDot.className = 'level-dot' + (i < data.level ? ' filled' : '');
-        levelContainer.appendChild(levelDot);
-      }
+      // 10단계일 경우 너무 많은 점이 생기므로 진행 바로 표시
+      const progressBar = document.createElement('div');
+      progressBar.className = 'level-progress-bar';
+      
+      const progress = document.createElement('div');
+      progress.className = 'level-progress';
+      progress.style.width = `${(data.level / data.maxLevel) * 100}%`;
+      
+      progressBar.appendChild(progress);
+      levelContainer.appendChild(progressBar);
       
       info.appendChild(levelContainer);
       item.appendChild(info);
@@ -1217,32 +1224,35 @@ class UpgradeSystem {
       const effectCost = document.createElement('div');
       effectCost.className = 'effect-cost';
       
-      // 효과
+      // 효과 - 현재 레벨 효과와 다음 레벨 효과 표시
       let effectText = '';
+      // 다음 레벨 또는 현재 레벨의 효과 가져오기
+      const nextLevelIndex = data.level < data.maxLevel ? data.level : data.maxLevel - 1;
+      const nextEffect = data.effect[nextLevelIndex];
+      
+      // 현재까지 누적된 총 효과 계산
+      let totalEffect = 0;
+      for (let i = 0; i < data.level; i++) {
+        totalEffect += data.effect[i];
+      }
+      
+      // 항목별 효과 표시 형식 설정
       if (type === 'range') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `+${effect}`;
+        effectText = `총 +${totalEffect} (다음 레벨: +${nextEffect})`;
       } else if (type === 'capacity') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `+${effect}`;
+        effectText = `총 +${totalEffect} (다음 레벨: +${nextEffect})`;
       } else if (type === 'reloadSpeed') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `${effect * 100}% 증가`;
+        effectText = `총 ${(totalEffect * 100).toFixed(0)}% 증가 (다음 레벨: +${(nextEffect * 100).toFixed(0)}%)`;
       } else if (type === 'productionRate') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `${effect * 100}% 증가`;
+        effectText = `총 ${(totalEffect * 100).toFixed(0)}% 증가 (다음 레벨: +${(nextEffect * 100).toFixed(0)}%)`;
       } else if (type === 'deliveryCost') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `-$${effect}`;
+        effectText = `총 -$${totalEffect.toFixed(1)} (다음 레벨: -$${nextEffect})`;
       } else if (type === 'buildingHealth') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `${effect * 100}% 증가`;
+        effectText = `총 ${(totalEffect * 100).toFixed(0)}% 증가 (다음 레벨: +${(nextEffect * 100).toFixed(0)}%)`;
       } else if (type === 'repairRate') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `${effect * 100}% 증가`;
+        effectText = `총 ${(totalEffect * 100).toFixed(0)}% 증가 (다음 레벨: +${(nextEffect * 100).toFixed(0)}%)`;
       } else if (type === 'income') {
-        const effect = data.level < data.maxLevel ? data.effect[data.level] : data.effect[data.maxLevel - 1];
-        effectText = `+$${effect}`;
+        effectText = `총 +$${totalEffect} (다음 레벨: +$${nextEffect})`;
       }
       
       const effect = document.createElement('div');
@@ -1290,8 +1300,16 @@ class UpgradeSystem {
       money -= result.cost;
       document.getElementById('money').textContent = money;
       
+      // 자금 지출 기록
+      if (playerHistory) {
+        playerHistory.recordMoneySpent(result.cost);
+      }
+      
       // 시각적 효과 및 알림
-      showMessage(`${this.upgrades[category][type].title} 업그레이드 성공! (레벨 ${this.upgrades[category][type].level})`, 2000);
+      const currentLevel = this.upgrades[category][type].level;
+      const maxLevel = this.upgrades[category][type].maxLevel;
+      const levelText = currentLevel < maxLevel ? `레벨 ${currentLevel}/${maxLevel}` : `최대 레벨`;
+      showMessage(`${this.upgrades[category][type].title} 업그레이드 성공! (${levelText})`, 2000);
       
       // 메뉴 갱신
       this.switchTab(category);
