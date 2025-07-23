@@ -11,7 +11,7 @@
 
 아이언돔은 실제 미사일 방어 시스템을 모티브로 한 3D 전략 시뮬레이션 게임입니다. 플레이어는 도시를 보호하기 위해 미사일 발사대와 공장을 전략적으로 배치하여 적의 미사일 공격을 막아내야 합니다.
 
-실행주소1 : https://iron-dome.vercel.app/
+실행주소1 : https://iron-dome-beryl.vercel.app/
 
 실행주소2 : https://dev-canvas-pi.vercel.app/
 
