@@ -53,6 +53,7 @@ let launchers = [];
 let factories = [];
 let enemyMissiles = [];
 let defenseMissiles = [];
+let rangeVisualizer; // 방공영역 시각화 객체
 let money = 250;
 let isGameActive = false;
 let isCooldown = false;
@@ -648,8 +649,214 @@ class Building extends THREE.Mesh {
     }
 }
 
+/**
+ * 방공영역 시각화를 담당하는 클래스
+ * 발사대의 방어 범위를 시각적으로 표현하고 중첩 영역을 강조 표시합니다.
+ */
+class DefenseRangeVisualizer {
+  constructor() {
+    // 활성화된 방공영역을 담는 맵 (발사대 ID → 시각화 객체)
+    this.activeRanges = new Map();
+    
+    // 중첩 영역 표시를 위한 재질
+    this.overlapMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff5500,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false
+    });
+    
+    // 중첩 영역을 표시하는 객체들
+    this.overlapObjects = [];
+    
+    // 방공영역 표시 설정
+    this.showRangesOption = true;
+    this.showOverlapsOption = true;
+  }
+
+  /**
+   * 발사대의 방공영역을 시각적으로 표시합니다.
+   * @param {MissileLauncher} launcher - 발사대 객체
+   */
+  showRange(launcher) {
+    if (!this.showRangesOption) return;
+    
+    // 이미 표시되고 있는 경우 숨기기
+    if (launcher.rangeCircle.visible) {
+      this.hideRange(launcher);
+      return;
+    }
+    
+    // 방공영역 표시
+    launcher.rangeCircle.visible = true;
+    
+    // activeRanges 맵에 추가
+    this.activeRanges.set(launcher.id, launcher.rangeCircle);
+    
+    // 중첩 영역 계산 및 표시
+    if (this.showOverlapsOption && this.activeRanges.size > 1) {
+      this.calculateOverlaps();
+    }
+  }
+
+  /**
+   * 발사대의 방공영역 표시를 숨깁니다.
+   * @param {MissileLauncher} launcher - 발사대 객체
+   */
+  hideRange(launcher) {
+    if (launcher.rangeCircle) {
+      launcher.rangeCircle.visible = false;
+    }
+    
+    // activeRanges 맵에서 제거
+    this.activeRanges.delete(launcher.id);
+    
+    // 중첩 영역 업데이트
+    this.clearOverlaps();
+    if (this.showOverlapsOption && this.activeRanges.size > 1) {
+      this.calculateOverlaps();
+    }
+  }
+
+  /**
+   * 모든 방공영역 표시를 토글합니다.
+   */
+  toggleAllRanges() {
+    const allVisible = launchers.every(launcher => launcher.rangeCircle.visible);
+    
+    launchers.forEach(launcher => {
+      if (allVisible) {
+        this.hideRange(launcher);
+      } else {
+        this.showRange(launcher);
+      }
+    });
+    
+    // 중첩 영역 업데이트
+    if (!allVisible && this.showOverlapsOption && launchers.length > 1) {
+      this.calculateOverlaps();
+    }
+  }
+
+  /**
+   * 중첩된 방공영역을 계산하고 시각화합니다.
+   */
+  calculateOverlaps() {
+    if (!this.showOverlapsOption || this.activeRanges.size < 2) {
+      return;
+    }
+    
+    // 기존 중첩 객체 제거
+    this.clearOverlaps();
+    
+    // 활성화된 발사대 목록 가져오기
+    const activeLaunchers = launchers.filter(launcher => 
+      launcher.rangeCircle.visible
+    );
+    
+    if (activeLaunchers.length < 2) return;
+    
+    // 각 발사대 쌍에 대해 중첩 영역 계산
+    for (let i = 0; i < activeLaunchers.length; i++) {
+      for (let j = i + 1; j < activeLaunchers.length; j++) {
+        const launcher1 = activeLaunchers[i];
+        const launcher2 = activeLaunchers[j];
+        
+        // 두 발사대 사이의 거리 계산
+        const distance = launcher1.position.distanceTo(launcher2.position);
+        
+        // 두 방공영역이 겹치는 경우
+        if (distance < launcher1.range + launcher2.range) {
+          // 완전 포함 관계인 경우는 처리하지 않음
+          if (distance + Math.min(launcher1.range, launcher2.range) <= Math.max(launcher1.range, launcher2.range)) {
+            continue;
+          }
+          
+          // 중첩 영역 표시를 위한 원 생성
+          // 실제 중첩 영역 계산은 복잡하므로 간소화된 표현 사용
+          const overlapCenter = new THREE.Vector3(
+            (launcher1.position.x + launcher2.position.x) / 2,
+            0.02, // 지면보다 약간 위에 표시
+            (launcher1.position.z + launcher2.position.z) / 2
+          );
+          
+          // 중첩 영역의 크기는 두 원의 중첩 정도에 따라 결정
+          const overlapSize = (launcher1.range + launcher2.range - distance) / 2;
+          
+          const overlapGeometry = new THREE.CircleGeometry(overlapSize, 32);
+          const overlapMesh = new THREE.Mesh(overlapGeometry, this.overlapMaterial);
+          overlapMesh.rotation.x = -Math.PI / 2; // 지면과 평행하게 배치
+          overlapMesh.position.copy(overlapCenter);
+          
+          scene.add(overlapMesh);
+          this.overlapObjects.push(overlapMesh);
+        }
+      }
+    }
+  }
+
+  /**
+   * 중첩 영역 표시를 모두 제거합니다.
+   */
+  clearOverlaps() {
+    this.overlapObjects.forEach(obj => scene.remove(obj));
+    this.overlapObjects = [];
+  }
+
+  /**
+   * 모든 발사대의 방공영역을 업데이트합니다.
+   */
+  updateAllRanges() {
+    // 모든 중첩 영역 제거
+    this.clearOverlaps();
+    
+    // 방공영역 표시 업데이트
+    this.activeRanges.clear();
+    
+    if (this.showRangesOption) {
+      launchers.forEach(launcher => {
+        if (launcher.rangeCircle.visible) {
+          this.activeRanges.set(launcher.id, launcher.rangeCircle);
+        }
+      });
+      
+      // 중첩 영역 재계산
+      if (this.showOverlapsOption && this.activeRanges.size > 1) {
+        this.calculateOverlaps();
+      }
+    }
+  }
+
+  /**
+   * 방공영역 표시 설정을 변경합니다.
+   * @param {boolean} showRanges - 방공영역 표시 여부
+   * @param {boolean} showOverlaps - 중첩 영역 표시 여부
+   */
+  updateSettings(showRanges, showOverlaps) {
+    this.showRangesOption = showRanges;
+    this.showOverlapsOption = showOverlaps;
+    
+    // 설정 변경에 따른 시각화 업데이트
+    if (!showRanges) {
+      // 모든 방공영역 숨기기
+      launchers.forEach(launcher => {
+        if (launcher.rangeCircle) {
+          launcher.rangeCircle.visible = false;
+        }
+      });
+      this.activeRanges.clear();
+      this.clearOverlaps();
+    } else {
+      // 활성화되었던 방공영역 다시 표시
+      this.updateAllRanges();
+    }
+  }
+}
+
 class MissileLauncher {
     constructor(position) {
+        // 고유 ID 생성 (타임스탬프와 랜덤값 조합)
+        this.id = 'launcher_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
         this.position = position.clone();
         this.position.y = 0;
         this.health = 100;
@@ -721,6 +928,9 @@ class MissileLauncher {
         this.rangeCircle.position.copy(this.position);
         this.rangeCircle.visible = false;
         scene.add(this.rangeCircle);
+        
+        // 선택 상태 추가
+        this.rangeCircle.userData = { selected: false };
     }
 
     createRangeCircle() {
@@ -735,6 +945,84 @@ class MissileLauncher {
         mesh.rotation.x = -Math.PI / 2;
         mesh.position.y = 0.01;
         return mesh;
+    }
+    
+    /**
+     * 발사대의 방공영역 업데이트 (업그레이드 시 사용)
+     * @param {number} newRange - 새로운 방공영역 범위
+     */
+    updateRange(newRange) {
+        if (newRange === this.range) return;
+        
+        // 기존 범위와 다른 경우에만 업데이트
+        this.range = newRange;
+        
+        // 기존 rangeCircle 제거
+        const wasVisible = this.rangeCircle.visible;
+        scene.remove(this.rangeCircle);
+        
+        // 새로운 rangeCircle 생성
+        this.rangeCircle = this.createRangeCircle();
+        this.rangeCircle.position.copy(this.position);
+        this.rangeCircle.visible = wasVisible;
+        this.rangeCircle.userData = { selected: wasVisible }; // 이전 선택 상태 유지
+        scene.add(this.rangeCircle);
+        
+        // 방공영역 시각화 업데이트
+        if (rangeVisualizer && wasVisible) {
+            rangeVisualizer.updateAllRanges();
+        }
+        
+        // UI 업데이트
+        document.getElementById('rangeValue').textContent = this.range;
+        
+        // 시각적 피드백 제공
+        this.showRangeUpgradeEffect();
+    }
+    
+    /**
+     * 발사대 범위 업그레이드 시 시각 효과
+     */
+    showRangeUpgradeEffect() {
+        if (PERFORMANCE.effectsQuality === 'low') return;
+        
+        // 범위 확장 애니메이션 효과
+        const expansionRing = new THREE.Mesh(
+            new THREE.RingGeometry(this.range - 2, this.range, 64),
+            new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            })
+        );
+        expansionRing.rotation.x = -Math.PI / 2;
+        expansionRing.position.copy(this.position);
+        expansionRing.position.y = 0.02;
+        scene.add(expansionRing);
+        
+        // 확장 애니메이션
+        gsap.to(expansionRing.material, {
+            opacity: 0,
+            duration: 1.5,
+            ease: "power2.out",
+            onComplete: () => scene.remove(expansionRing)
+        });
+        
+        // 파티클 효과
+        if (PERFORMANCE.effectsQuality === 'high') {
+            const upgradeEffect = new ParticleSystem(this.position.clone(), {
+                count: 30,
+                color: 0x00ffff,
+                size: { min: 0.1, max: 0.3 },
+                speed: { min: 0.1, max: 0.3 },
+                lifetime: { min: 40, max: 60 },
+                shape: 'sphere',
+                spread: this.range / 4
+            });
+            activeEffects.push(upgradeEffect);
+        }
     }
 
     update() {
@@ -1251,6 +1539,7 @@ class EnemyMissile {
 }
 
 // ==================== Game Functions ====================
+
 function spawnEnemyMissile() {
     if (!isGameActive || isCooldown) return;
     if (Date.now() <= nextEnemySpawn) return;
@@ -1475,6 +1764,10 @@ document.getElementById('startButton').addEventListener('click', () => {
     if (!isGameActive) {
         isGameActive = true;
         createCity();
+        
+        // 방공영역 시각화 객체 초기화
+        rangeVisualizer = new DefenseRangeVisualizer();
+        
         document.getElementById('startButton').style.display = 'none';
         document.getElementById('settingsMenu').style.display = 'none';
         
@@ -1495,6 +1788,9 @@ document.getElementById('startButton').addEventListener('click', () => {
         
         // Setup purchase buttons
         setupPurchaseButtons();
+        
+        // 방공영역 표시 설정 초기화
+        initializeRangeVisualizerSettings();
     }
 });
 
@@ -1594,6 +1890,144 @@ function setupPurchaseButtons() {
     startWaveButton.addEventListener('click', () => startWaveImmediately());
     container.appendChild(startWaveButton);
 }
+
+/**
+ * 방공영역 시각화 설정을 초기화합니다.
+ */
+function initializeRangeVisualizerSettings() {
+    // 방공영역 표시 버튼 이벤트 처리
+    document.querySelectorAll('#rangeVisualizationButtons .setting-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const value = button.getAttribute('data-value');
+            const showRanges = value === 'ON';
+            
+            // UI 업데이트
+            document.querySelectorAll('#rangeVisualizationButtons .setting-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            button.classList.add('selected');
+            
+            // 시각화 설정 업데이트
+            if (rangeVisualizer) {
+                const showOverlaps = document.querySelector('#overlapVisualizationButtons .selected').getAttribute('data-value') === 'ON';
+                rangeVisualizer.updateSettings(showRanges, showOverlaps);
+            }
+        });
+    });
+    
+    // 중첩 영역 표시 버튼 이벤트 처리
+    document.querySelectorAll('#overlapVisualizationButtons .setting-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const value = button.getAttribute('data-value');
+            const showOverlaps = value === 'ON';
+            
+            // UI 업데이트
+            document.querySelectorAll('#overlapVisualizationButtons .setting-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            button.classList.add('selected');
+            
+            // 시각화 설정 업데이트
+            if (rangeVisualizer) {
+                const showRanges = document.querySelector('#rangeVisualizationButtons .selected').getAttribute('data-value') === 'ON';
+                rangeVisualizer.updateSettings(showRanges, showOverlaps);
+            }
+        });
+    });
+}
+
+/**
+ * 발사대 호버 이벤트 처리를 위한 함수
+ * @param {MouseEvent} event - 마우스 이벤트
+ */
+function onMouseMove(event) {
+    // 게임이 활성화되지 않았거나 방공영역 시각화 객체가 없으면 리턴
+    if (!isGameActive || !rangeVisualizer) return;
+    
+    // 마우스 좌표 계산
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    
+    // 발사대 객체와의 충돌 검사
+    const intersects = raycaster.intersectObjects(
+        launchers.map(launcher => launcher.mesh)
+    );
+    
+    // 기존에 마우스 오버 중인 발사대가 있는 경우
+    if (window.hoveredLauncher && (!intersects.length || 
+        !launchers.some(launcher => launcher.mesh === intersects[0].object.parent))) {
+        // 마우스가 발사대에서 벗어났으므로 방공영역 숨기기
+        const launcher = window.hoveredLauncher;
+        if (rangeVisualizer && !launcher.rangeCircle.userData.selected) {
+            rangeVisualizer.hideRange(launcher);
+        }
+        window.hoveredLauncher = null;
+    }
+    
+    // 마우스가 발사대 위에 있는 경우
+    if (intersects.length > 0) {
+        // 마우스 아래에 있는 발사대 찾기
+        for (const launcher of launchers) {
+            if (launcher.mesh === intersects[0].object.parent || 
+                launcher.mesh.children.includes(intersects[0].object)) {
+                // 방공영역 표시
+                if (rangeVisualizer && launcher !== window.hoveredLauncher) {
+                    rangeVisualizer.showRange(launcher);
+                    window.hoveredLauncher = launcher;
+                }
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * 발사대 클릭 이벤트 처리를 확장합니다.
+ * @param {MouseEvent} event - 마우스 이벤트
+ */
+function onMouseClickForRange(event) {
+    // 게임이 활성화되지 않았거나 방공영역 시각화 객체가 없으면 리턴
+    if (!isGameActive || !rangeVisualizer || isPlacementMode) return;
+    
+    // 마우스 좌표 계산
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    
+    // 발사대 객체와의 충돌 검사
+    const intersects = raycaster.intersectObjects(
+        launchers.map(launcher => launcher.mesh)
+    );
+    
+    // 발사대를 클릭한 경우
+    if (intersects.length > 0) {
+        // 클릭한 발사대 찾기
+        for (const launcher of launchers) {
+            if (launcher.mesh === intersects[0].object.parent || 
+                launcher.mesh.children.includes(intersects[0].object)) {
+                // 방공영역 토글
+                if (rangeVisualizer) {
+                    if (!launcher.rangeCircle.visible) {
+                        rangeVisualizer.showRange(launcher);
+                        // 선택 상태 표시
+                        launcher.rangeCircle.userData.selected = true;
+                    } else {
+                        rangeVisualizer.hideRange(launcher);
+                        launcher.rangeCircle.userData.selected = false;
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+// 마우스 이벤트 리스너 추가
+window.addEventListener('mousemove', onMouseMove);
+window.addEventListener('click', onMouseClickForRange);
 
 function selectItem(itemType) {
     selectedItem = itemType;
@@ -1823,6 +2257,73 @@ function updateLeftPanelStats() {
     // Update detection range
     const currentRange = launchers.length > 0 ? launchers[0].range : difficultySettings[DIFFICULTY].range;
     document.getElementById('rangeValue').textContent = currentRange;
+    
+    // 범위 업그레이드 버튼이 없으면 추가
+    if (launchers.length > 0 && !document.getElementById('upgradeRangeButton')) {
+        const rangeContainer = document.getElementById('launcherStatsSection');
+        const rangeStat = rangeContainer.querySelector('div:nth-child(2)'); // 탐지 범위 요소
+        
+        if (rangeStat) {
+            // 기존 내용 저장
+            const originalContent = rangeStat.innerHTML;
+            
+            // 업그레이드 버튼 추가
+            rangeStat.innerHTML = `
+                ${originalContent}
+                <button id="upgradeRangeButton" class="small-button">+</button>
+            `;
+            
+            // 버튼 스타일 추가
+            const styleElement = document.createElement('style');
+            styleElement.textContent = `
+                .small-button {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 2px 5px;
+                    margin-left: 5px;
+                    cursor: pointer;
+                    font-size: 12px;
+                }
+                .small-button:hover {
+                    background-color: #45a049;
+                }
+            `;
+            document.head.appendChild(styleElement);
+            
+            // 버튼 이벤트 리스너 추가
+            document.getElementById('upgradeRangeButton').addEventListener('click', upgradeAllLaunchersRange);
+        }
+    }
+}
+
+/**
+ * 테스트 목적으로 모든 발사대의 범위를 업그레이드합니다.
+ */
+function upgradeAllLaunchersRange() {
+    if (launchers.length === 0) {
+        showMessage('업그레이드할 발사대가 없습니다!', 2000);
+        return;
+    }
+    
+    // 자금 확인
+    const upgradeCost = 50;
+    if (money < upgradeCost) {
+        showMessage('업그레이드를 위한 자금이 부족합니다!', 2000);
+        return;
+    }
+    
+    money -= upgradeCost;
+    document.getElementById('money').textContent = money;
+    
+    // 모든 발사대 범위 증가
+    const rangeIncrease = 4;
+    launchers.forEach(launcher => {
+        launcher.updateRange(launcher.range + rangeIncrease);
+    });
+    
+    showMessage(`모든 발사대의 방공영역이 증가했습니다! (+${rangeIncrease})`, 2000);
 }
 
 function showMessage(text, duration) {
