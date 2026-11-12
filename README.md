@@ -7,6 +7,10 @@
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![Three.js](https://img.shields.io/badge/Three.js-000000?style=for-the-badge&logo=three.js&logoColor=white)
 
+## 📸 실제 실행 화면
+
+![아이언 돔 실제 화면](5-iron-dome.jpg)
+
 ## 📖 게임 소개
 
 
